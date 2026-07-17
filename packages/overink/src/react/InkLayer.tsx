@@ -98,6 +98,9 @@ export const InkLayer = forwardRef<InkLayerHandle, InkLayerProps>(function InkLa
     if (pointers) engineRef.current?.setPointers(pointers)
   }, [pointers])
   useEffect(() => {
+    if (eraserRadius !== undefined) engineRef.current?.setEraserRadius(eraserRadius)
+  }, [eraserRadius])
+  useEffect(() => {
     engineRef.current?.setReadOnly(readOnly)
   }, [readOnly])
 

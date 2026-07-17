@@ -52,6 +52,7 @@ export class InkEngine {
   private erasing = false
   private erasedSomething = false
   private lastErase: [number, number] | null = null
+  private eraserCursor: [number, number] | null = null
   private frame: number | null = null
   private destroyed = false
 
@@ -80,6 +81,7 @@ export class InkEngine {
     this.wet.addEventListener('pointermove', this.onPointerMove)
     this.wet.addEventListener('pointerup', this.onPointerUp)
     this.wet.addEventListener('pointercancel', this.onPointerCancel)
+    this.wet.addEventListener('pointerleave', this.onPointerLeave)
     this.wet.addEventListener('touchstart', this.onTouch, { passive: false })
     this.wet.addEventListener('touchmove', this.onTouch, { passive: false })
 
@@ -108,7 +110,8 @@ export class InkEngine {
     this.wet.style.pointerEvents = active ? 'auto' : 'none'
     // Fingers keep scrolling the page natively unless touch is a drawing pointer.
     this.wet.style.touchAction = this.pointers.has('touch') ? 'none' : 'pan-x pan-y'
-    this.wet.style.cursor = !active ? 'default' : this.tool === 'eraser' ? 'cell' : 'crosshair'
+    // The eraser hides the native cursor: the ring on the wet canvas replaces it.
+    this.wet.style.cursor = !active ? 'default' : this.tool === 'eraser' ? 'none' : 'crosshair'
   }
 
   private resize(): void {
@@ -164,6 +167,20 @@ export class InkEngine {
     }
   }
 
+  private onPointerLeave = (e: PointerEvent): void => {
+    if (e.pointerId === this.activePointer) return
+    if (this.eraserCursor) {
+      this.eraserCursor = null
+      this.scheduleWetFrame()
+    }
+  }
+
+  private updateEraserCursor(e: PointerEvent): void {
+    const rect = this.wet.getBoundingClientRect()
+    this.eraserCursor = [(e.clientX - rect.left) / this.scale, (e.clientY - rect.top) / this.scale]
+    this.scheduleWetFrame()
+  }
+
   private pushPoint(e: PointerEvent, rect: DOMRect): void {
     const x = (e.clientX - rect.left) / this.scale
     const y = (e.clientY - rect.top) / this.scale
@@ -186,6 +203,7 @@ export class InkEngine {
       this.erasing = true
       this.erasedSomething = false
       this.lastErase = null
+      this.updateEraserCursor(e)
       this.eraseAt(e)
       return
     }
@@ -195,6 +213,10 @@ export class InkEngine {
   }
 
   private onPointerMove = (e: PointerEvent): void => {
+    // Hover: the eraser ring follows the pointer even before pressing.
+    if (this.tool === 'eraser' && !this.readOnly && this.accepts(e)) {
+      this.updateEraserCursor(e)
+    }
     if (e.pointerId !== this.activePointer) return
     e.preventDefault()
     if (this.erasing) {
@@ -297,10 +319,32 @@ export class InkEngine {
   }
 
   private paintWet(): void {
-    if (this.livePoints.length === 0) return
     this.clearWet()
-    this.wetCtx.setTransform(this.dpr * this.scale, 0, 0, this.dpr * this.scale, 0, 0)
-    this.drawStroke(this.wetCtx, this.liveStroke(), false)
+    const ctx = this.wetCtx
+    ctx.setTransform(this.dpr * this.scale, 0, 0, this.dpr * this.scale, 0, 0)
+    if (this.livePoints.length > 0) {
+      this.drawStroke(ctx, this.liveStroke(), false)
+    }
+    if (this.tool === 'eraser' && this.eraserCursor) {
+      this.drawEraserCursor(ctx)
+    }
+  }
+
+  private drawEraserCursor(ctx: CanvasRenderingContext2D): void {
+    const [x, y] = this.eraserCursor as [number, number]
+    const radius = this.eraserRadius / this.scale
+    const hairline = 1.5 / this.scale
+    ctx.beginPath()
+    ctx.arc(x, y, radius, 0, Math.PI * 2)
+    ctx.fillStyle = 'rgba(124, 124, 140, 0.15)'
+    ctx.fill()
+    ctx.lineWidth = hairline
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)'
+    ctx.stroke()
+    ctx.beginPath()
+    ctx.arc(x, y, radius + hairline, 0, Math.PI * 2)
+    ctx.strokeStyle = 'rgba(40, 40, 55, 0.75)'
+    ctx.stroke()
   }
 
   private liveStroke(): InkStroke {
@@ -354,7 +398,16 @@ export class InkEngine {
 
   setTool(tool: InkTool): void {
     this.tool = tool
+    if (tool !== 'eraser' && this.eraserCursor) {
+      this.eraserCursor = null
+      this.scheduleWetFrame()
+    }
     this.applyInteractivity()
+  }
+
+  setEraserRadius(radius: number): void {
+    this.eraserRadius = radius
+    if (this.eraserCursor) this.scheduleWetFrame()
   }
 
   setColor(color: string): void {
@@ -425,6 +478,7 @@ export class InkEngine {
     this.wet.removeEventListener('pointermove', this.onPointerMove)
     this.wet.removeEventListener('pointerup', this.onPointerUp)
     this.wet.removeEventListener('pointercancel', this.onPointerCancel)
+    this.wet.removeEventListener('pointerleave', this.onPointerLeave)
     this.wet.removeEventListener('touchstart', this.onTouch)
     this.wet.removeEventListener('touchmove', this.onTouch)
     this.base.remove()

@@ -33,11 +33,13 @@ export function Playground() {
   const [doc, setDoc] = useState<InkDocument>(() => createInkDocument({ background: 'lines' }))
   const [tool, setTool] = useState<InkTool>('pen')
   const [color, setColor] = useState(INK_COLORS[1])
-  const [sizes, setSizes] = useState({ pen: 4, highlighter: 16 })
+  const [sizes, setSizes] = useState({ pen: 4, highlighter: 16, eraser: 12 })
   const [fingerDraws, setFingerDraws] = useState(false)
 
   const strokeTool = tool === 'highlighter' ? 'highlighter' : 'pen'
+  const sizeTool = tool === 'eraser' ? 'eraser' : strokeTool
   const size = sizes[strokeTool]
+  const sliderValue = sizes[sizeTool]
   const pointers = useMemo<PointerKind[]>(
     () => (fingerDraws ? ['pen', 'mouse', 'touch'] : ['pen', 'mouse']),
     [fingerDraws],
@@ -136,11 +138,12 @@ export function Playground() {
           <input
             type="range"
             min={2}
-            max={24}
-            value={size}
-            onChange={e => setSizes({ ...sizes, [strokeTool]: Number(e.target.value) })}
+            max={32}
+            value={sliderValue}
+            disabled={tool === 'none'}
+            onChange={e => setSizes({ ...sizes, [sizeTool]: Number(e.target.value) })}
           />
-          <span className="mono">{size}</span>
+          <span className="mono">{sliderValue}</span>
         </label>
 
         <div className="group" role="group" aria-label="Paper">
@@ -206,6 +209,7 @@ export function Playground() {
               tool={tool}
               color={color}
               size={size}
+              eraserRadius={sizes.eraser}
               pointers={pointers}
             />
           </div>
