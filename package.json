@@ -1,0 +1,13 @@
+{
+  "name": "overink-monorepo",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "playground"
+  ],
+  "scripts": {
+    "build": "npm run build -w overink && npm run build -w overink-playground",
+    "build:pkg": "npm run build -w overink",
+    "dev": "npm run build:pkg && npm run dev -w overink-playground"
+  }
+}
