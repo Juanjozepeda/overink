@@ -13,5 +13,5 @@ export {
   type CreateInkDocumentOptions,
 } from './document'
 export { InkEngine, type InkEngineOptions } from './core/engine'
-export { strokesHitByEraser } from './core/hit'
+export { eraseStrokesAt } from './core/hit'
 export { toSVG } from './svg'

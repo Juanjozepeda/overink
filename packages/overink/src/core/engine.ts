@@ -1,8 +1,9 @@
 import type { InkDocument, InkStroke, InkTool, PaperKind, PointerKind, StrokeTool } from '../types'
 import { createInkDocument } from '../document'
 import { HIGHLIGHTER_OPACITY, outlineToPathData, strokeOutline } from './outline'
-import { strokesHitByEraser } from './hit'
+import { eraseStrokesAt } from './hit'
 import { History } from './history'
+import { newId } from './id'
 
 export interface InkEngineOptions {
   document?: InkDocument
@@ -17,11 +18,6 @@ export interface InkEngineOptions {
 }
 
 const LIVE_STROKE_ID = '__live__'
-
-function newStrokeId(): string {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID()
-  return `s-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
-}
 
 /**
  * Framework-agnostic ink surface. Mounts two stacked canvases inside a
@@ -55,6 +51,7 @@ export class InkEngine {
   private livePoints: number[] = []
   private erasing = false
   private erasedSomething = false
+  private lastErase: [number, number] | null = null
   private frame: number | null = null
   private destroyed = false
 
@@ -83,6 +80,8 @@ export class InkEngine {
     this.wet.addEventListener('pointermove', this.onPointerMove)
     this.wet.addEventListener('pointerup', this.onPointerUp)
     this.wet.addEventListener('pointercancel', this.onPointerCancel)
+    this.wet.addEventListener('touchstart', this.onTouch, { passive: false })
+    this.wet.addEventListener('touchmove', this.onTouch, { passive: false })
 
     this.applyInteractivity()
 
@@ -149,6 +148,22 @@ export class InkEngine {
     return this.pointers.has(e.pointerType as PointerKind)
   }
 
+  private onTouch = (e: TouchEvent): void => {
+    if (this.readOnly || this.tool === 'none') return
+    // touch-action: none already blocks pans when touch drawing is enabled.
+    if (this.pointers.has('touch')) return
+    if (!this.pointers.has('pen')) return
+    for (let i = 0; i < e.touches.length; i++) {
+      const touch = e.touches[i] as Touch & { touchType?: 'stylus' | 'direct' }
+      if (touch.touchType === 'stylus') {
+        // iOS Safari otherwise claims the Pencil drag as a scroll pan and
+        // fires pointercancel mid-stroke. Fingers stay scrollable.
+        e.preventDefault()
+        return
+      }
+    }
+  }
+
   private pushPoint(e: PointerEvent, rect: DOMRect): void {
     const x = (e.clientX - rect.left) / this.scale
     const y = (e.clientY - rect.top) / this.scale
@@ -170,6 +185,7 @@ export class InkEngine {
     if (this.tool === 'eraser') {
       this.erasing = true
       this.erasedSomething = false
+      this.lastErase = null
       this.eraseAt(e)
       return
     }
@@ -205,6 +221,7 @@ export class InkEngine {
     }
     if (this.erasing) {
       this.erasing = false
+      this.lastErase = null
       if (this.erasedSomething) {
         this.erasedSomething = false
         this.emitChange()
@@ -217,26 +234,52 @@ export class InkEngine {
   private onPointerCancel = (e: PointerEvent): void => {
     if (e.pointerId !== this.activePointer) return
     this.activePointer = null
-    this.livePoints = []
-    this.erasing = false
-    this.clearWet()
-    if (this.erasedSomething) {
-      this.erasedSomething = false
-      this.emitChange()
+    if (this.erasing) {
+      this.erasing = false
+      this.lastErase = null
+      if (this.erasedSomething) {
+        this.erasedSomething = false
+        this.emitChange()
+      }
+      return
     }
+    // Commit whatever was drawn: a cancelled pointer must never eat ink.
+    this.commitLiveStroke()
   }
 
   private eraseAt(e: PointerEvent): void {
     const rect = this.wet.getBoundingClientRect()
     const x = (e.clientX - rect.left) / this.scale
     const y = (e.clientY - rect.top) / this.scale
-    const hit = strokesHitByEraser(this.doc.strokes, x, y, this.eraserRadius / this.scale)
-    if (hit.size === 0) return
+    const radius = this.eraserRadius / this.scale
+
+    // Fast swipes can jump many pixels between events; erase along the
+    // travelled segment so no ink is skipped.
+    let strokes: InkStroke[] | null = null
+    let current = this.doc.strokes
+    const from = this.lastErase
+    this.lastErase = [x, y]
+    if (from) {
+      const dist = Math.hypot(x - from[0], y - from[1])
+      const steps = Math.floor(dist / Math.max(radius, 1))
+      for (let i = 1; i <= steps; i++) {
+        const t = i / (steps + 1)
+        const next = eraseStrokesAt(current, from[0] + (x - from[0]) * t, from[1] + (y - from[1]) * t, radius)
+        if (next) {
+          current = next
+          strokes = next
+        }
+      }
+    }
+    const next = eraseStrokesAt(current, x, y, radius)
+    if (next) strokes = next
+
+    if (!strokes) return
     if (!this.erasedSomething) {
       this.history.record(this.doc.strokes)
       this.erasedSomething = true
     }
-    this.doc = { ...this.doc, strokes: this.doc.strokes.filter(s => !hit.has(s.id)) }
+    this.doc = { ...this.doc, strokes }
     this.repaint()
   }
 
@@ -281,7 +324,7 @@ export class InkEngine {
       this.livePoints = []
       return
     }
-    const stroke: InkStroke = { ...this.liveStroke(), id: newStrokeId() }
+    const stroke: InkStroke = { ...this.liveStroke(), id: newId() }
     this.livePoints = []
     this.history.record(this.doc.strokes)
     this.doc = {
@@ -382,6 +425,8 @@ export class InkEngine {
     this.wet.removeEventListener('pointermove', this.onPointerMove)
     this.wet.removeEventListener('pointerup', this.onPointerUp)
     this.wet.removeEventListener('pointercancel', this.onPointerCancel)
+    this.wet.removeEventListener('touchstart', this.onTouch)
+    this.wet.removeEventListener('touchmove', this.onTouch)
     this.base.remove()
     this.wet.remove()
   }

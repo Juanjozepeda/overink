@@ -1,4 +1,5 @@
 import type { InkStroke } from '../types'
+import { newId } from './id'
 
 function segmentDistanceSq(
   px: number,
@@ -21,30 +22,68 @@ function segmentDistanceSq(
   return dx * dx + dy * dy
 }
 
-/** Ids of strokes whose path passes within `radius` of (x, y), all in logical units. */
-export function strokesHitByEraser(
+/**
+ * Partial erase: removes the parts of every stroke within `radius` of (x, y)
+ * and splits the survivors into separate strokes, GoodNotes-style. All units
+ * are logical. Returns the new strokes array, or null when nothing was hit.
+ */
+export function eraseStrokesAt(
   strokes: InkStroke[],
   x: number,
   y: number,
   radius: number,
-): Set<string> {
-  const hit = new Set<string>()
+): InkStroke[] | null {
+  let changed = false
+  const result: InkStroke[] = []
+
   for (const stroke of strokes) {
     const reach = radius + stroke.size / 2
     const reachSq = reach * reach
     const pts = stroke.points
-    if (pts.length >= 3 && pts.length < 6) {
-      const dx = x - pts[0]
-      const dy = y - pts[1]
-      if (dx * dx + dy * dy <= reachSq) hit.add(stroke.id)
+    const count = Math.floor(pts.length / 3)
+
+    let anyHit = false
+    const pointHit: boolean[] = new Array(count)
+    for (let i = 0; i < count; i++) {
+      const dx = x - pts[i * 3]
+      const dy = y - pts[i * 3 + 1]
+      pointHit[i] = dx * dx + dy * dy <= reachSq
+      if (pointHit[i]) anyHit = true
+    }
+
+    // Fast strokes leave sparse samples: the eraser can cross a segment
+    // without touching either endpoint, so segments get their own check.
+    const segmentHit: boolean[] = new Array(Math.max(0, count - 1))
+    for (let i = 0; i < count - 1; i++) {
+      segmentHit[i] =
+        !pointHit[i] &&
+        !pointHit[i + 1] &&
+        segmentDistanceSq(x, y, pts[i * 3], pts[i * 3 + 1], pts[(i + 1) * 3], pts[(i + 1) * 3 + 1]) <=
+          reachSq
+      if (segmentHit[i]) anyHit = true
+    }
+
+    if (!anyHit) {
+      result.push(stroke)
       continue
     }
-    for (let i = 0; i + 5 < pts.length; i += 3) {
-      if (segmentDistanceSq(x, y, pts[i], pts[i + 1], pts[i + 3], pts[i + 4]) <= reachSq) {
-        hit.add(stroke.id)
-        break
-      }
+
+    changed = true
+    let run: number[] = []
+    const flush = () => {
+      if (run.length >= 6) result.push({ ...stroke, id: newId(), points: run })
+      run = []
     }
+    for (let i = 0; i < count; i++) {
+      if (pointHit[i]) {
+        flush()
+        continue
+      }
+      run.push(pts[i * 3], pts[i * 3 + 1], pts[i * 3 + 2])
+      if (i < count - 1 && segmentHit[i]) flush()
+    }
+    flush()
   }
-  return hit
+
+  return changed ? result : null
 }

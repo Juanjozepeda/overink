@@ -12,7 +12,7 @@ Most web drawing libraries own the whole surface. overink is deliberately a *lay
 - **Real pen input.** Apple Pencil pressure is captured as-is; mouse strokes get velocity-based width via [perfect-freehand](https://github.com/steveruizok/perfect-freehand).
 - **Palm rejection.** Only the pointer types you allow can draw (`pen` and `mouse` by default). Fingers keep scrolling the page natively.
 - **Low latency.** `getCoalescedEvents()` captures every pen sample between frames, and the in-progress stroke paints on a dedicated "wet ink" canvas so committed strokes are never repainted per frame.
-- **Tools.** Pen, highlighter, stroke eraser, undo/redo, and plain / ruled / grid paper backgrounds.
+- **Tools.** Pen, highlighter, a partial eraser that removes ink exactly where it passes (splitting strokes when needed), undo/redo, and plain / ruled / grid paper backgrounds.
 - **Framework-agnostic core.** The engine is plain TypeScript with zero dependencies beyond perfect-freehand. React bindings ship in `overink/react`; React itself is an optional peer dependency.
 
 ## Quick start (React)

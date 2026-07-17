@@ -26,7 +26,7 @@ export function Page() {
 }
 ```
 
-- Tools: pen, highlighter, stroke eraser, undo/redo, paper backgrounds.
+- Tools: pen, highlighter, partial eraser (splits strokes where it passes), undo/redo, paper backgrounds.
 - Only the pointer types you allow can draw; fingers keep scrolling.
 - Framework-agnostic `InkEngine` core in the root export; React bindings in `overink/react`.
 - `toSVG(doc)` renders any document to a crisp standalone SVG.
