@@ -1,6 +1,6 @@
 {
   "name": "overink",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Pressure-sensitive vector ink layer you can mount on top of any editor. Palm rejection, low latency, strokes as portable JSON.",
   "license": "MIT",
   "author": "Juan José Zepeda",

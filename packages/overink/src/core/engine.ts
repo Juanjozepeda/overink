@@ -225,10 +225,26 @@ export class InkEngine {
     }
     const rect = this.wet.getBoundingClientRect()
     const coalesced = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : []
-    if (coalesced.length > 0) {
-      for (const sample of coalesced) this.pushPoint(sample, rect)
-    } else {
-      this.pushPoint(e, rect)
+    const samples = coalesced.length > 0 ? coalesced : [e]
+    for (const sample of samples) {
+      // Pointer capture keeps streaming events past the page edge; ink stops
+      // at the boundary and the stroke ends there.
+      if (
+        sample.clientX < rect.left ||
+        sample.clientX > rect.right ||
+        sample.clientY < rect.top ||
+        sample.clientY > rect.bottom
+      ) {
+        this.activePointer = null
+        try {
+          this.wet.releasePointerCapture(e.pointerId)
+        } catch {
+          // Nothing captured for synthetic events.
+        }
+        this.commitLiveStroke()
+        return
+      }
+      this.pushPoint(sample, rect)
     }
     this.scheduleWetFrame()
   }

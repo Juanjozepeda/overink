@@ -29,11 +29,13 @@ export function strokeOutline(stroke: InkStroke, options: { last?: boolean } = {
       last: options.last ?? true,
     })
   }
+  // Gel-pen look: near-constant width with a light pressure response and a
+  // smooth outline, instead of the heavily tapered crayon-like default.
   return getStroke(points, {
     size: stroke.size,
-    thinning: 0.55,
-    smoothing: 0.5,
-    streamline: 0.5,
+    thinning: 0.3,
+    smoothing: 0.65,
+    streamline: 0.55,
     simulatePressure: uniformPressure,
     last: options.last ?? true,
   })

@@ -28,18 +28,27 @@ const PAPERS: { id: PaperKind; label: string }[] = [
   { id: 'grid', label: 'Grid' },
 ]
 
+const SIZE_PRESETS = {
+  pen: [3, 5, 8],
+  highlighter: [10, 18, 28],
+  eraser: [8, 14, 24],
+} as const
+
+const PRESET_LABELS = ['Fine', 'Medium', 'Thick']
+const PRESET_DOTS = [6, 10, 14]
+
 export function Playground() {
   const inkRef = useRef<InkLayerHandle>(null)
   const [doc, setDoc] = useState<InkDocument>(() => createInkDocument({ background: 'lines' }))
   const [tool, setTool] = useState<InkTool>('pen')
   const [color, setColor] = useState(INK_COLORS[1])
-  const [sizes, setSizes] = useState({ pen: 4, highlighter: 16, eraser: 12 })
+  const [presets, setPresets] = useState({ pen: 1, highlighter: 1, eraser: 1 })
   const [fingerDraws, setFingerDraws] = useState(false)
 
   const strokeTool = tool === 'highlighter' ? 'highlighter' : 'pen'
   const sizeTool = tool === 'eraser' ? 'eraser' : strokeTool
-  const size = sizes[strokeTool]
-  const sliderValue = sizes[sizeTool]
+  const size = SIZE_PRESETS[strokeTool][presets[strokeTool]]
+  const eraserRadius = SIZE_PRESETS.eraser[presets.eraser]
   const pointers = useMemo<PointerKind[]>(
     () => (fingerDraws ? ['pen', 'mouse', 'touch'] : ['pen', 'mouse']),
     [fingerDraws],
@@ -133,18 +142,20 @@ export function Playground() {
           ))}
         </div>
 
-        <label className="group slider">
-          <span>Size</span>
-          <input
-            type="range"
-            min={2}
-            max={32}
-            value={sliderValue}
-            disabled={tool === 'none'}
-            onChange={e => setSizes({ ...sizes, [sizeTool]: Number(e.target.value) })}
-          />
-          <span className="mono">{sliderValue}</span>
-        </label>
+        <div className="group" role="group" aria-label="Size">
+          {PRESET_LABELS.map((label, i) => (
+            <button
+              key={label}
+              type="button"
+              aria-label={`${label} size`}
+              className={presets[sizeTool] === i ? 'dot active' : 'dot'}
+              disabled={tool === 'none'}
+              onClick={() => setPresets({ ...presets, [sizeTool]: i })}
+            >
+              <span style={{ width: PRESET_DOTS[i], height: PRESET_DOTS[i] }} />
+            </button>
+          ))}
+        </div>
 
         <div className="group" role="group" aria-label="Paper">
           {PAPERS.map(p => (
@@ -190,7 +201,12 @@ export function Playground() {
         <div className="paper-wrap">
           <div className="paper">
             <PaperBackground kind={doc.background} spacing={32} />
-            <div className="editor" contentEditable suppressContentEditableWarning spellCheck={false}>
+            <div
+              className="editor"
+              contentEditable={tool === 'none'}
+              suppressContentEditableWarning
+              spellCheck={false}
+            >
               <h2>Class notes: wave optics</h2>
               <p>
                 This text lives in a plain contentEditable region. The ink you draw sits on a
@@ -209,7 +225,7 @@ export function Playground() {
               tool={tool}
               color={color}
               size={size}
-              eraserRadius={sizes.eraser}
+              eraserRadius={eraserRadius}
               pointers={pointers}
             />
           </div>

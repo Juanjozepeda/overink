@@ -157,21 +157,38 @@ body {
   box-shadow: 0 0 0 2px var(--accent);
 }
 
-.slider {
-  color: var(--muted);
-  font-size: 13px;
-  gap: 10px;
+.dot {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: border-color 120ms, background 120ms;
 }
 
-.slider input {
-  accent-color: var(--accent);
-  width: 110px;
+.dot:hover:not(:disabled) {
+  border-color: #3a3a4d;
 }
 
-.slider .mono {
-  color: var(--text);
-  min-width: 2ch;
-  text-align: right;
+.dot.active {
+  border-color: var(--accent);
+  background: rgba(124, 58, 237, 0.2);
+}
+
+.dot:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.dot span {
+  display: block;
+  border-radius: 50%;
+  background: var(--text);
 }
 
 .check {
