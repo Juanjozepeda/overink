@@ -2,9 +2,9 @@
 
 [![overink playground](docs/overink.png)](https://overink.vercel.app)
 
-I wanted handwriting in a note-taking app I'm building, and every canvas library I tried wanted to own the whole page. overink doesn't. It's a thin ink layer you drop on top of an editor you already have. Handwriting on one layer, typing on the one below, same page.
+I wanted handwriting in a note-taking app I'm building, and every drawing library I tried took over the whole page. overink doesn't. It's a thin layer of ink you place on top of an editor you already have. You write by hand on the top layer and type on the one below, all on the same page.
 
-Write with an Apple Pencil over TipTap, ProseMirror, a plain `contentEditable`, whatever renders inside a box.
+It works over TipTap, ProseMirror, a plain text box, or anything else that shows up inside a container.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Built with TypeScript](https://img.shields.io/badge/built%20with-TypeScript-3178c6.svg)](https://www.typescriptlang.org/)
@@ -18,18 +18,18 @@ npm i overink
 
 ## Why I built it
 
-I'm building Scriva, a school notes app, and it needed Apple Pencil support that felt right on an iPad without shipping a native app. The handwriting layer turned out to have nothing to do with Scriva's accounts or its AI, so I pulled it into its own package and opened it up. What's left is just the ink.
+I'm building Scriva, an app for school notes, and it needed Apple Pencil writing that felt good on an iPad without me shipping a separate native app. The handwriting part had nothing to do with Scriva's accounts or its AI, so I split it into its own package and made it open source. What's left is just the ink.
 
-One thing shaped the format: the drawing has to survive offline sync and, one day, move to a native app without a rewrite. So strokes are data, not pixels.
+One idea shaped the whole thing: the writing has to keep working offline and, someday, move to a native app without me rebuilding it. So each stroke is saved as data, not as an image.
 
 ## What you get
 
-- Every stroke is a list of points with pressure, saved as plain JSON. It scales without blurring, weighs almost nothing, exports to a crisp SVG, and rides through IndexedDB and network sync as one more field.
-- Apple Pencil pressure goes in untouched. Mouse and touch strokes get their width from velocity via [perfect-freehand](https://github.com/steveruizok/perfect-freehand), tuned to read like a gel pen instead of a crayon.
-- You choose which pointer types draw, pen and mouse by default, and fingers keep scrolling. On iPad the Pencil keeps drawing even when Safari wants to treat the drag as a scroll and bail on you.
-- `getCoalescedEvents()` grabs every Pencil sample between frames, and the live stroke paints on its own canvas so the committed ink never repaints while you write.
-- Pen, highlighter, and an eraser that rubs ink out where it passes and splits the stroke around the gap, the way GoodNotes does it. Undo, redo, and plain, ruled, or grid paper.
-- The engine is plain TypeScript and depends on nothing but perfect-freehand. React bindings live in `overink/react`, with React as an optional peer dependency, so a Vue or Svelte wrapper is a small job.
+- Every stroke is saved as a list of points, in plain JSON. It stays sharp at any zoom, takes up almost no space, and turns into a clean image when you need to print or export.
+- The Apple Pencil's pressure comes through, so lines get thicker when you press harder. It's tuned to feel like a gel pen, not a crayon.
+- You decide what can draw. Pen and mouse by default, so resting your hand or scrolling with a finger won't leave marks. On iPad the Pencil keeps writing even when Safari tries to scroll instead.
+- Writing feels immediate, with no visible lag between the Pencil and the ink.
+- Pen, highlighter, and an eraser that only rubs out the part you touch, the way GoodNotes does it. Plus undo, redo, and blank, lined, or grid paper.
+- The core is plain TypeScript with almost no dependencies. React components come built in, and if you use Vue or Svelte, wrapping it is a short job.
 
 ## Quick start (React)
 
@@ -52,11 +52,11 @@ export function Page() {
 }
 ```
 
-Give the container `position: relative` and the layer fills it. It draws above the editor, and when you set `tool="none"` it lets every click and keystroke fall through to whatever sits underneath.
+Give the container `position: relative` and the layer fills it. It sits above your editor, and when you set `tool="none"` every click and keystroke passes straight through to whatever is underneath.
 
-## Quick start (vanilla)
+## Quick start (without React)
 
-No React? The engine stands on its own.
+Not using React? The core works on its own.
 
 ```ts
 import { InkEngine, createInkDocument } from 'overink'
@@ -75,7 +75,7 @@ engine.destroy()
 
 ## The data format
 
-One page of ink is one JSON document.
+A page of ink is a single JSON object.
 
 ```json
 {
@@ -95,57 +95,57 @@ One page of ink is one JSON document.
 }
 ```
 
-A few decisions I'd defend:
+A few things worth knowing:
 
-- `points` is a flat array of `[x, y, pressure]` triplets, not an array of objects. It comes out around a third of the size, which you feel once a document hits IndexedDB and the network on every save.
-- Coordinates live in a logical space anchored to `width` (794 is A4 at 96 dpi by default). The layer scales everything by `containerWidth / width`, so ink zooms with the page and ignores `devicePixelRatio`.
-- The raw input points are the source of truth. Smoothing, thinning, and caps get computed at draw time, so the same JSON can render later in a native app (with PencilKit, say) and the format never changes.
-- Erasing deletes strokes from the array. There are no eraser strokes to store. The highlighter keeps only its `tool` and `color`; opacity is a rendering detail.
-- `version` is there so I can change the format later without guessing what I'm looking at.
+- Each point is three numbers: x, y, and how hard you pressed. Storing them as a plain list keeps files small, which matters when they save and sync on every change.
+- Coordinates are measured against the page width, so the ink scales with the page and looks the same on any screen.
+- overink saves the points you actually drew, not the smoothed line you see. The smoothing happens as it draws, so the same file can be reopened later, even by a native app, and still look right.
+- Erasing removes strokes from the list. There is nothing extra to store.
+- The `version` field lets me change the format later without breaking old notes.
 
-## API
+## Reference
 
 ### `<InkLayer />` from `overink/react`
 
 | Prop | Type | Default | What it does |
 | --- | --- | --- | --- |
-| `value` | `InkDocument` | | Controlled document. Hand back the object from `onChange` unchanged. |
-| `defaultValue` | `InkDocument` | `createInkDocument()` | Starting document when you go uncontrolled. |
-| `onChange` | `(doc: InkDocument) => void` | | Fires when a stroke is committed, erased, undone, redone, or cleared. Never per point. |
-| `tool` | `'pen' \| 'highlighter' \| 'eraser' \| 'none'` | `'pen'` | `'none'` drops `pointer-events` on the canvas so clicks and keystrokes reach the editor below. |
-| `color` | `string` | `'#1d1d28'` | Stroke color. |
-| `size` | `number` | `4` | Stroke diameter in logical units. |
-| `pointers` | `('pen' \| 'mouse' \| 'touch')[]` | `['pen', 'mouse']` | Which pointer types draw. Leave `'touch'` out and fingers scroll instead. |
-| `readOnly` | `boolean` | `false` | Show the ink, ignore input. |
-| `eraserRadius` | `number` | `12` | Eraser reach in CSS pixels. |
+| `value` | `InkDocument` | | The current page of ink. Pass back what `onChange` gives you. |
+| `defaultValue` | `InkDocument` | `createInkDocument()` | Where to start if you don't control it yourself. |
+| `onChange` | `(doc: InkDocument) => void` | | Runs whenever a stroke is added, erased, undone, redone, or cleared. Not on every point. |
+| `tool` | `'pen' \| 'highlighter' \| 'eraser' \| 'none'` | `'pen'` | `'none'` lets clicks and typing reach the editor underneath. |
+| `color` | `string` | `'#1d1d28'` | Ink color. |
+| `size` | `number` | `4` | How thick the stroke is. |
+| `pointers` | `('pen' \| 'mouse' \| 'touch')[]` | `['pen', 'mouse']` | What is allowed to draw. Leave `'touch'` out and fingers scroll instead. |
+| `readOnly` | `boolean` | `false` | Show the ink but don't accept new drawing. |
+| `eraserRadius` | `number` | `12` | How big the eraser is, in pixels. |
 
-The ref hands you `undo()`, `redo()`, `clear()`, `canUndo()`, `canRedo()`, and `getDocument()`.
+The ref gives you `undo()`, `redo()`, `clear()`, `canUndo()`, `canRedo()`, and `getDocument()`.
 
 ### `<PaperBackground />`
 
-Ruled or grid paper as pure CSS. Mount it under your editor (first child of the same container) so the lines sit behind the text. Props: `kind`, `spacing`, `lineColor`.
+Lined or grid paper, drawn with plain CSS. Put it under your editor so the lines sit behind your text. Options: `kind`, `spacing`, `lineColor`.
 
 ### `InkEngine` from `overink`
 
-The class doing the work behind `InkLayer`. Its constructor takes the container element and the same options as the React props, plus `document`. Methods: `setDocument`, `getDocument`, `setTool`, `setColor`, `setSize`, `setPointers`, `setReadOnly`, `setBackground`, `setEraserRadius`, `undo`, `redo`, `clear`, `destroy`, and the `canUndo` / `canRedo` getters.
+The core class behind `InkLayer`, for when you're not using React. You create it with a container and the same options as the React props. It has methods to change the tool, color, size, paper, and eraser size, and to undo, redo, clear, and clean up: `setDocument`, `getDocument`, `setTool`, `setColor`, `setSize`, `setPointers`, `setReadOnly`, `setBackground`, `setEraserRadius`, `undo`, `redo`, `clear`, `destroy`, plus `canUndo` and `canRedo`.
 
 ### `toSVG(doc)`
 
-Turns a document into a standalone SVG string. Good for PDF export: lay the SVG over your page render instead of rasterizing a canvas.
+Turns a page of ink into an image you can drop into a PDF or anywhere else.
 
-## How the overlay works
+## How it fits together
 
 ```
 ┌ position: relative ────────────┐
 │  <PaperBackground/>   z: back  │
 │  <YourEditor/>                 │
 │  <InkLayer/>          z: front │
-│    ├─ base canvas  (committed) │
+│    ├─ base canvas  (finished)  │
 │    └─ wet canvas   (live)      │
 └────────────────────────────────┘
 ```
 
-The wet canvas is the only surface that repaints while you draw, on a `desynchronized` 2D context with coalesced pointer samples once per frame. Lift the pen and the stroke commits to the base canvas and fires through `onChange`. A `ResizeObserver` keeps both canvases matched to the container as the editor grows.
+overink stacks two canvases over your editor. One holds the ink you've finished, the other shows the stroke you're drawing right now. Only the second one redraws as you write, which is what keeps it fast. Lift the pen and the stroke moves to the finished layer and gets handed to your `onChange`. Both canvases resize on their own when your editor grows.
 
 ## Running it locally
 
