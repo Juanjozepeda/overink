@@ -6,6 +6,7 @@ I wanted handwriting in a note-taking app I'm building, and every drawing librar
 
 It works over TipTap, ProseMirror, a plain text box, or anything else that shows up inside a container.
 
+[![npm version](https://img.shields.io/npm/v/overink.svg?color=7c3aed)](https://www.npmjs.com/package/overink)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Built with TypeScript](https://img.shields.io/badge/built%20with-TypeScript-3178c6.svg)](https://www.typescriptlang.org/)
 [![Live demo](https://img.shields.io/badge/demo-overink.vercel.app-7c3aed.svg)](https://overink.vercel.app)
